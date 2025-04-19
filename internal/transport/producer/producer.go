@@ -13,11 +13,11 @@ import (
 
 type Producer struct {
 	client     *kafka.Reader
-	outputChan chan *entity.Event
+	outputChan chan entity.Event
 	logger     *logger.Logger
 }
 
-func Init(cfg *config.Config, outputchan chan *entity.Event, logger *logger.Logger) *Producer {
+func Init(cfg *config.Config, outputchan chan entity.Event, logger *logger.Logger) *Producer {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        []string{cfg.KafkaUrl},
 		GroupID:        cfg.GroupID,
@@ -57,6 +57,8 @@ func (prod *Producer) ListenForMsgs() {
 
 			continue
 		}
+
+		prod.outputChan <- event
 
 		if err = prod.client.CommitMessages(context.Background(), msg); err != nil {
 			prod.logger.Error("error commit messages", zapcore.Field{

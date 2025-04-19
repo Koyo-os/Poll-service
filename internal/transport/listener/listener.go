@@ -14,13 +14,13 @@ import (
 )
 
 type Listener struct {
-	inputChan chan *entity.Event
+	inputChan chan entity.Event
 	logger    *logger.Logger
 	service   service.PollService
 	cfg       *config.Config
 }
 
-func Init(inputChan chan *entity.Event, logger *logger.Logger, cfg *config.Config) (*Listener, error) {
+func Init(inputChan chan entity.Event, logger *logger.Logger, cfg *config.Config) (*Listener, error) {
 	repo, err := repository.Init(cfg)
 	if err != nil {
 		return nil, err
