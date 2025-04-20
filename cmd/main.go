@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
-	"os/signal"
 
 	"github.com/Koyo-os/Poll-service/internal/entity"
 	"github.com/Koyo-os/Poll-service/internal/transport/listener"
@@ -36,16 +34,17 @@ func main() {
 
 	logger.Info("listener init successfully")
 
-	producer := producer.Init(cfg, mainChan, logger)
+	producer, err := producer.Init(cfg, mainChan, logger)
+	if err != nil {
+		logger.Error("error init producer", zap.Error(err))
+		return
+	}
 
 	logger.Info("producer init successfully")
 
 	logger.Info("starting poll service...")
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
-
-	go listener.Listen(ctx)
+	go listener.Listen(context.Background())
 
 	producer.ListenForMsgs()
 }
