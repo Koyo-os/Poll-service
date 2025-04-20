@@ -1,0 +1,10 @@
+reqs:
+  create_req_type : "request.poll.create"
+  update_req_type : "request.poll.update"
+topics:
+  req_topic : "poll.requests"
+  producer_topic : "poll.producer"
+
+group_id_name : "poll"
+kafka_url : "localhost:9092"
+dsn : "main.db"
