@@ -1,32 +1,42 @@
 package publisher
 
 import (
-	"context"
 	"encoding/json"
+	"time"
 
+	"github.com/IBM/sarama"
 	"github.com/Koyo-os/Poll-service/internal/entity"
 	"github.com/Koyo-os/Poll-service/pkg/config"
 	"github.com/Koyo-os/Poll-service/pkg/logger"
-	"github.com/segmentio/kafka-go"
 	"go.uber.org/zap/zapcore"
 )
 
 type Publisher struct {
-	client *kafka.Writer
-	logger *logger.Logger
+	producer sarama.SyncProducer
+	logger   *logger.Logger
+	cfg      *config.Config
 }
 
-func Init(cfg *config.Config, logger *logger.Logger) *Publisher {
-	writer := kafka.NewWriter(kafka.WriterConfig{
-		Brokers: []string{cfg.KafkaUrl},
-		Topic:   cfg.Topic.Producer,
-	})
-	defer writer.Close()
+func Init(cfg *config.Config, logger *logger.Logger) (*Publisher, error) {
+	config := sarama.NewConfig()
+	config.Producer.Return.Successes = true
+	config.Producer.RequiredAcks = sarama.WaitForAll
+	config.Producer.Timeout = 5 * time.Second
+
+	producer, err := sarama.NewSyncProducer([]string{cfg.KafkaUrl}, config)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Publisher{
-		client: writer,
-		logger: logger,
-	}
+		producer: producer,
+		logger:   logger,
+		cfg:      cfg,
+	}, nil
+}
+
+func (p *Publisher) Close() error {
+	return p.producer.Close()
 }
 
 func (p *Publisher) Publish(poll any, Type string) error {
@@ -35,9 +45,7 @@ func (p *Publisher) Publish(poll any, Type string) error {
 		p.logger.Error("error encode poll for publish", zapcore.Field{
 			Key:    "err",
 			String: err.Error(),
-		},
-		)
-
+		})
 		return err
 	}
 
@@ -53,24 +61,37 @@ func (p *Publisher) Publish(poll any, Type string) error {
 				Key:    "event_UUID",
 				String: event.ID,
 			})
-
 		return err
 	}
 
-	err = p.client.WriteMessages(context.Background(), kafka.Message{
-		Value: eventJson,
-	})
+	msg := &sarama.ProducerMessage{
+		Topic: p.cfg.Topic.Producer,
+		Value: sarama.ByteEncoder(eventJson),
+	}
+
+	partition, offset, err := p.producer.SendMessage(msg)
 	if err != nil {
 		p.logger.Error("error publish event", zapcore.Field{
 			Key:    "err",
 			String: err.Error(),
 		})
+		return err
 	}
 
-	p.logger.Info("successfully published event with", zapcore.Field{
-		Key:    "event_UUID",
-		String: event.ID,
-	})
+	p.logger.Info("successfully published event with",
+		zapcore.Field{
+			Key:    "event_UUID",
+			String: event.ID,
+		},
+		zapcore.Field{
+			Key:     "partition",
+			Integer: int64(partition),
+		},
+		zapcore.Field{
+			Key:     "offset",
+			Integer: offset,
+		},
+	)
 
 	return nil
 }
