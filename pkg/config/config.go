@@ -11,14 +11,14 @@ type Config struct {
 	Reqs struct {
 		CreatePollRequestType string `yaml:"create_req_type"`
 		UpdatePollRequestType string `yaml:"update_req_type"`
-	}
+	} `yaml:"reqs"`
 	Topic struct {
 		Request  string `yaml:"req_topic"`
 		Producer string `yaml:"producer_topic"`
-	}
+	} `yaml:"topics"`
 	GroupID  string `yaml:"group_id_name"`
 	KafkaUrl string `yaml:"kafka_url"`
-	DSN      string
+	DSN      string `yaml:"dsn"`
 }
 
 func Init(path string) (*Config, error) {
