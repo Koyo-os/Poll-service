@@ -5,7 +5,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    
     container_name: poll_service
+    environment:
+      - KAFKA_URL=kafka:9092
     volumes:
       - poll_data:/data
   kafka:
