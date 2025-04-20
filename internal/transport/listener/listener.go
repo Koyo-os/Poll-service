@@ -21,12 +21,19 @@ type Listener struct {
 }
 
 func Init(inputChan chan entity.Event, logger *logger.Logger, cfg *config.Config) (*Listener, error) {
+	logger.Info("init repository...")
+
 	repo, err := repository.Init(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	publisher := publisher.Init(cfg, logger)
+	logger.Info("init publisher...")
+
+	publisher, err := publisher.Init(cfg, logger)
+	if err != nil {
+		return nil, err
+	}
 
 	service := service.Init(repo, publisher)
 
