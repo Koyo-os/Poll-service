@@ -4,67 +4,86 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/IBM/sarama"
 	"github.com/Koyo-os/Poll-service/internal/entity"
 	"github.com/Koyo-os/Poll-service/pkg/config"
 	"github.com/Koyo-os/Poll-service/pkg/logger"
-	"github.com/segmentio/kafka-go"
 	"go.uber.org/zap/zapcore"
 )
 
 type Producer struct {
-	client     *kafka.Reader
+	client     sarama.ConsumerGroup
 	outputChan chan entity.Event
 	logger     *logger.Logger
+	ready      chan bool
+	cfg        *config.Config
 }
 
-func Init(cfg *config.Config, outputchan chan entity.Event, logger *logger.Logger) *Producer {
-	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:        []string{cfg.KafkaUrl},
-		GroupID:        cfg.GroupID,
-		Topic:          cfg.Topic.Request,
-		CommitInterval: 0,
-	})
+func Init(cfg *config.Config, outputChan chan entity.Event, logger *logger.Logger) (*Producer, error) {
+	config := sarama.NewConfig()
+	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
+	config.Consumer.Offsets.Initial = sarama.OffsetNewest
 
-	defer reader.Close()
+	client, err := sarama.NewConsumerGroup([]string{cfg.KafkaUrl}, cfg.GroupID, config)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Producer{
-		client:     reader,
-		outputChan: outputchan,
-	}
+		client:     client,
+		outputChan: outputChan,
+		logger:     logger,
+		cfg:        cfg,
+		ready:      make(chan bool),
+	}, nil
 }
 
 func (prod *Producer) ListenForMsgs() {
 	prod.logger.Info("starting producer...")
 
+	ctx := context.Background()
 	for {
-		msg, err := prod.client.ReadMessage(context.Background())
-		if err != nil {
-			prod.logger.Error("error handle message", zapcore.Field{
+		if err := prod.client.Consume(ctx, []string{prod.cfg.Topic.Request}, prod); err != nil {
+			prod.logger.Error("error from consumer", zapcore.Field{
 				Key:    "err",
 				String: err.Error(),
 			})
-
-			continue
 		}
 
+		if ctx.Err() != nil {
+			return
+		}
+		prod.ready = make(chan bool)
+	}
+}
+
+func (prod *Producer) Setup(sarama.ConsumerGroupSession) error {
+	close(prod.ready)
+	return nil
+}
+
+func (prod *Producer) Cleanup(sarama.ConsumerGroupSession) error {
+	return nil
+}
+
+func (prod *Producer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	for msg := range claim.Messages() {
 		var event entity.Event
 
-		if err = json.Unmarshal(msg.Value, &event); err != nil {
+		if err := json.Unmarshal(msg.Value, &event); err != nil {
 			prod.logger.Error("error unmarshal event", zapcore.Field{
 				Key:    "err",
 				String: err.Error(),
 			})
-
 			continue
 		}
 
 		prod.outputChan <- event
-
-		if err = prod.client.CommitMessages(context.Background(), msg); err != nil {
-			prod.logger.Error("error commit messages", zapcore.Field{
-				Key:    "err",
-				String: err.Error(),
-			})
-		}
+		session.MarkMessage(msg, "")
 	}
+	return nil
+}
+
+func (prod *Producer) Close() error {
+	return prod.client.Close()
 }

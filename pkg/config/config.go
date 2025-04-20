@@ -18,7 +18,7 @@ type Config struct {
 	} `yaml:"topics"`
 	GroupID  string `yaml:"group_id_name"`
 	KafkaUrl string `yaml:"kafka_url"`
-	DSN      string `yaml:"dsn"`
+	Dsn      string `yaml:"dsn"`
 }
 
 func Init(path string) (*Config, error) {
