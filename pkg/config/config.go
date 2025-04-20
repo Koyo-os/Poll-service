@@ -33,5 +33,13 @@ func Init(path string) (*Config, error) {
 		return nil, fmt.Errorf("decode error: %v", err)
 	}
 
+	kafka := os.Getenv("KAFKA_URL")
+
+	if len(kafka) == 0 {
+		kafka = "localhost:9092"
+	}
+
+	cfg.KafkaUrl = kafka
+
 	return &cfg, nil
 }
