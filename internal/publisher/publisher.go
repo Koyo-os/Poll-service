@@ -2,12 +2,14 @@ package publisher
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/Koyo-os/Poll-service/internal/entity"
 	"github.com/Koyo-os/Poll-service/pkg/config"
 	"github.com/Koyo-os/Poll-service/pkg/logger"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -18,6 +20,16 @@ type Publisher struct {
 }
 
 func Init(cfg *config.Config, logger *logger.Logger) (*Publisher, error) {
+	logger.Info("starting init producer")
+
+	if cfg.KafkaUrl == "" {
+		logger.Warn("kafka url is nil")
+
+		return nil, errors.New("kafka url is nil")
+	}
+
+	logger.Info("starting conntect to kafka with", zap.String("url", cfg.KafkaUrl))
+
 	config := sarama.NewConfig()
 	config.Producer.Return.Successes = true
 	config.Producer.RequiredAcks = sarama.WaitForAll
@@ -25,8 +37,11 @@ func Init(cfg *config.Config, logger *logger.Logger) (*Publisher, error) {
 
 	producer, err := sarama.NewSyncProducer([]string{cfg.KafkaUrl}, config)
 	if err != nil {
+		logger.Error("error init producer", zap.Error(err))
 		return nil, err
 	}
+
+	logger.Info("all components of producer init successfully")
 
 	return &Publisher{
 		producer: producer,
