@@ -6,5 +6,5 @@ topics:
   producer_topic : "poll.producer"
 
 group_id_name : "poll"
-kafka_url : "localhost:9092"
-dsn : "main.db"
+kafka_url : "kafka:9092"
+dsn : "/data/poll.db"
