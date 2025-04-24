@@ -15,7 +15,7 @@ type Field struct {
 }
 
 type Poll struct {
-	ID        uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ID        uuid.UUID `json:"id" gorm:"primaryKey"`
 	CreatedAt time.Time `json:"created_at"`
 	AuthorID  string    `json:"author_id"`
 	Desc      string    `json:"desc"`
