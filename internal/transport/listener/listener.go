@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 
 	"github.com/Koyo-os/Poll-service/internal/entity"
-	"github.com/Koyo-os/Poll-service/internal/publisher"
-	"github.com/Koyo-os/Poll-service/internal/repository"
 	"github.com/Koyo-os/Poll-service/internal/service"
 	"github.com/Koyo-os/Poll-service/pkg/config"
 	"github.com/Koyo-os/Poll-service/pkg/logger"
@@ -20,27 +18,7 @@ type Listener struct {
 	cfg       *config.Config
 }
 
-func Init(inputChan chan entity.Event, logger *logger.Logger, cfg *config.Config) (*Listener, error) {
-	logger.Debug("init repository...")
-
-	repo, err := repository.Init(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	logger.Debug("init publisher...")
-
-	publisher, err := publisher.Init(cfg, logger)
-	if err != nil {
-		logger.Error("error init publisher", zap.Error(err))
-
-		return nil, err
-	}
-
-	service := service.Init(repo, publisher)
-
-	logger.Info("successfully init listener components")
-
+func Init(inputChan chan entity.Event, logger *logger.Logger, cfg *config.Config, service service.PollService) (*Listener, error) {
 	return &Listener{
 		inputChan: inputChan,
 		service:   service,
