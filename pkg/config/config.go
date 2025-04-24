@@ -12,13 +12,10 @@ type Config struct {
 		CreatePollRequestType string `yaml:"create_req_type"`
 		UpdatePollRequestType string `yaml:"update_req_type"`
 	} `yaml:"reqs"`
-	Topic struct {
-		Request  string `yaml:"req_topic"`
-		Producer string `yaml:"producer_topic"`
-	} `yaml:"topics"`
-	GroupID  string `yaml:"group_id_name"`
-	KafkaUrl string `yaml:"kafka_url"`
-	Dsn      string `yaml:"dsn"`
+	RabbitmqUrl     string `yaml:"rabbitmq_url"`
+	RequestExchange string `yaml:"req_exchange"`
+	OutputExcange   string `yaml:"out_exchange"`
+	Dsn             string `yaml:"dsn"`
 }
 
 func Init(path string) (*Config, error) {
@@ -29,17 +26,11 @@ func Init(path string) (*Config, error) {
 		return nil, fmt.Errorf("error open file: %v", err)
 	}
 
+	defer file.Close()
+
 	if err = yaml.NewDecoder(file).Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("decode error: %v", err)
 	}
-
-	kafka := os.Getenv("KAFKA_URL")
-
-	if len(kafka) == 0 {
-		kafka = "localhost:9092"
-	}
-
-	cfg.KafkaUrl = kafka
 
 	return &cfg, nil
 }
