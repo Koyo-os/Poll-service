@@ -2,110 +2,99 @@ package publisher
 
 import (
 	"encoding/json"
-	"errors"
 	"time"
 
-	"github.com/IBM/sarama"
 	"github.com/Koyo-os/Poll-service/internal/entity"
 	"github.com/Koyo-os/Poll-service/pkg/config"
 	"github.com/Koyo-os/Poll-service/pkg/logger"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 type Publisher struct {
-	producer sarama.SyncProducer
-	logger   *logger.Logger
-	cfg      *config.Config
+	conn    *amqp.Connection
+	channel *amqp.Channel
+	logger  *logger.Logger
+	cfg     *config.Config
 }
 
-func Init(cfg *config.Config, logger *logger.Logger) (*Publisher, error) {
-	logger.Info("starting init producer")
-
-	if cfg.KafkaUrl == "" {
-		logger.Warn("kafka url is nil")
-
-		return nil, errors.New("kafka url is nil")
-	}
-
-	logger.Info("starting conntect to kafka with", zap.String("url", cfg.KafkaUrl))
-
-	config := sarama.NewConfig()
-	config.Producer.Return.Successes = true
-	config.Producer.RequiredAcks = sarama.WaitForAll
-	config.Producer.Timeout = 5 * time.Second
-
-	producer, err := sarama.NewSyncProducer([]string{cfg.KafkaUrl}, config)
+func Init(cfg *config.Config, logger *logger.Logger, conn *amqp.Connection) (*Publisher, error) {
+	channel, err := conn.Channel()
 	if err != nil {
-		logger.Error("error init producer", zap.Error(err))
+		logger.Error("error opening channel", zap.Error(err))
+		conn.Close()
 		return nil, err
 	}
 
-	logger.Info("all components of producer init successfully")
+	err = channel.ExchangeDeclare(
+		cfg.OutputExcange, // name
+		"direct",          // type
+		true,              // durable
+		false,             // auto-deleted
+		false,             // internal
+		false,             // no-wait
+		nil,               // arguments
+	)
+	if err != nil {
+		logger.Error("error declaring exchange", zap.Error(err))
+		channel.Close()
+		conn.Close()
+		return nil, err
+	}
+
+	logger.Info("all components of producer init success")
 
 	return &Publisher{
-		producer: producer,
-		logger:   logger,
-		cfg:      cfg,
+		conn:    conn,
+		channel: channel,
+		logger:  logger,
+		cfg:     cfg,
 	}, nil
 }
 
 func (p *Publisher) Close() error {
-	return p.producer.Close()
+	if err := p.channel.Close(); err != nil {
+		p.logger.Error("error closing channel", zap.Error(err))
+	}
+	return p.conn.Close()
 }
 
-func (p *Publisher) Publish(poll any, Type string) error {
+func (p *Publisher) Publish(poll any, routingKey string) error {
 	pollJson, err := json.Marshal(poll)
 	if err != nil {
-		p.logger.Error("error encode poll for publish", zapcore.Field{
-			Key:    "err",
-			String: err.Error(),
-		})
+		p.logger.Error("error encode poll for publish", zap.Error(err))
 		return err
 	}
 
-	event := entity.NewEvent(Type, pollJson)
+	event := entity.NewEvent(routingKey, pollJson)
 
 	eventJson, err := json.Marshal(event)
 	if err != nil {
-		p.logger.Error("error encode event for publish", zapcore.Field{
-			Key:    "err",
-			String: err.Error(),
-		},
-			zapcore.Field{
-				Key:    "event_UUID",
-				String: event.ID,
-			})
+		p.logger.Error("error encode event for publish",
+			zap.String("event_id", event.ID),
+			zap.Error(err),
+		)
 		return err
 	}
 
-	msg := &sarama.ProducerMessage{
-		Topic: p.cfg.Topic.Producer,
-		Value: sarama.ByteEncoder(eventJson),
-	}
-
-	partition, offset, err := p.producer.SendMessage(msg)
+	err = p.channel.Publish(
+		p.cfg.OutputExcange, // exchange
+		routingKey,          // routing key
+		false,               // mandatory
+		false,               // immediate
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        eventJson,
+			Timestamp:   time.Now(),
+		},
+	)
 	if err != nil {
-		p.logger.Error("error publish event", zapcore.Field{
-			Key:    "err",
-			String: err.Error(),
-		})
+		p.logger.Error("error publishing event")
 		return err
 	}
 
-	p.logger.Info("successfully published event with",
-		zapcore.Field{
-			Key:    "event_UUID",
-			String: event.ID,
-		},
-		zapcore.Field{
-			Key:     "partition",
-			Integer: int64(partition),
-		},
-		zapcore.Field{
-			Key:     "offset",
-			Integer: offset,
-		},
+	p.logger.Info("successfully published event",
+		zap.String("event_id", event.ID),
 	)
 
 	return nil
