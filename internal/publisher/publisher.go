@@ -28,7 +28,7 @@ func Init(cfg *config.Config, logger *logger.Logger, conn *amqp.Connection) (*Pu
 
 	err = channel.ExchangeDeclare(
 		cfg.OutputExcange, // name
-		"direct",          // type
+		"fanout",          // type
 		true,              // durable
 		false,             // auto-deleted
 		false,             // internal
@@ -36,13 +36,11 @@ func Init(cfg *config.Config, logger *logger.Logger, conn *amqp.Connection) (*Pu
 		nil,               // arguments
 	)
 	if err != nil {
-		logger.Error("error declaring exchange", zap.Error(err))
+		logger.Error("error declaring exchange " + err.Error())
 		channel.Close()
 		conn.Close()
 		return nil, err
 	}
-
-	logger.Info("all components of producer init success")
 
 	return &Publisher{
 		conn:    conn,
