@@ -21,7 +21,19 @@ import (
 )
 
 func main() {
-	logger := logger.Init()
+	cfgLog := logger.Config{
+		LogFile:   "app.log",
+		LogLevel:  "debug",
+		AppName:   "my-app",
+		AddCaller: true,
+	}
+
+	if err := logger.Init(cfgLog); err != nil {
+		panic(err)
+	}
+	defer logger.Sync()
+
+	logger := logger.Get()
 
 	cfg, err := config.Init("config.yaml")
 	if err != nil || cfg == nil {
@@ -29,7 +41,7 @@ func main() {
 		return
 	}
 
-	logger.Info("config loaded successfully from config.yaml")
+	logger.Info("config loaded successfully from", zap.String("path", "config.yaml"))
 
 	var mainChan chan entity.Event
 
