@@ -1,11 +1,10 @@
 package logger
 
 import (
-	"fmt"
 	"os"
+	"sync"
 
 	"go.uber.org/zap"
-	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -13,50 +12,114 @@ type Logger struct {
 	*zap.Logger
 }
 
-type CustomEncoder struct {
-	zapcore.Encoder
+var (
+	once   sync.Once
+	logger *Logger
+)
+
+type Config struct {
+	LogFile   string
+	LogLevel  string
+	AppName   string
+	AddCaller bool
 }
 
-func (e *CustomEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
-	var levelColor string
-	switch entry.Level {
-	case zapcore.DebugLevel:
-		levelColor = "\033[36m" // Cyan
-	case zapcore.InfoLevel:
-		levelColor = "\033[32m" // Green
-	case zapcore.WarnLevel:
-		levelColor = "\033[33m" // Yellow
-	case zapcore.ErrorLevel, zapcore.FatalLevel, zapcore.PanicLevel:
-		levelColor = "\033[31m" // Red
-	default:
-		levelColor = "\033[0m" // Reset
-	}
+func Init(cfg Config) error {
+	var err error
+	once.Do(func() {
+		logger, err = newLogger(cfg)
+	})
+	return err
+}
 
-	formatted := fmt.Sprintf(
-		"%s[%s]%s \033[1m%s\033[0m\033[0m: %s\n",
-		levelColor,
-		entry.Time.Format("2006-01-02 15:04:05"),
-		levelColor,
-		entry.Level.CapitalString(),
-		entry.Message,
+func newLogger(cfg Config) (*Logger, error) {
+	logLevel := parseLogLevel(cfg.LogLevel)
+
+	jsonEncoder := zapcore.NewJSONEncoder(makeProductionEncoderConfig())
+	consoleEncoder := zapcore.NewConsoleEncoder(makeDevelopmentEncoderConfig())
+
+	cores := []zapcore.Core{}
+
+	stdoutCore := zapcore.NewCore(
+		consoleEncoder,
+		zapcore.Lock(os.Stdout),
+		logLevel,
 	)
+	cores = append(cores, stdoutCore)
 
-	buf := buffer.NewPool().Get()
-	buf.AppendString(formatted)
-	return buf, nil
-}
+	if cfg.LogFile != "" {
+		logFile, err := os.OpenFile(cfg.LogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return nil, err
+		}
 
-func Init() *Logger {
-	config := zap.NewProductionConfig()
-	config.EncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05")
-	config.EncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
-
-	encoder := &CustomEncoder{
-		Encoder: zapcore.NewConsoleEncoder(config.EncoderConfig),
+		fileCore := zapcore.NewCore(
+			jsonEncoder,
+			zapcore.AddSync(logFile),
+			logLevel,
+		)
+		cores = append(cores, fileCore)
 	}
 
-	core := zapcore.NewCore(encoder, zapcore.AddSync(zapcore.Lock(os.Stdout)), zapcore.DebugLevel)
-	logger := zap.New(core, zap.AddCaller())
+	core := zapcore.NewTee(cores...)
 
-	return &Logger{logger}
+	opts := []zap.Option{
+		zap.Fields(zap.String("service", cfg.AppName)),
+	}
+	if cfg.AddCaller {
+		opts = append(opts, zap.AddCaller(), zap.AddCallerSkip(1))
+	}
+
+	return &Logger{
+		zap.New(core, opts...),
+	}, nil
+}
+
+func parseLogLevel(level string) zapcore.Level {
+	switch level {
+	case "debug":
+		return zapcore.DebugLevel
+	case "info":
+		return zapcore.InfoLevel
+	case "warn":
+		return zapcore.WarnLevel
+	case "error":
+		return zapcore.ErrorLevel
+	default:
+		return zapcore.InfoLevel
+	}
+}
+
+func makeProductionEncoderConfig() zapcore.EncoderConfig {
+	cfg := zap.NewProductionEncoderConfig()
+	cfg.EncodeTime = zapcore.ISO8601TimeEncoder
+	cfg.TimeKey = "timestamp"
+	cfg.LevelKey = "severity"
+	return cfg
+}
+
+func makeDevelopmentEncoderConfig() zapcore.EncoderConfig {
+	cfg := zap.NewDevelopmentEncoderConfig()
+	cfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	cfg.EncodeTime = zapcore.ISO8601TimeEncoder
+	cfg.TimeKey = "time"
+	cfg.LevelKey = "level"
+	cfg.MessageKey = "message"
+	cfg.CallerKey = "caller"
+	return cfg
+}
+
+func Sync() error {
+	if logger != nil {
+		return logger.Sync()
+	}
+	return nil
+}
+
+func Get() *Logger {
+	if logger == nil {
+		fallbackLogger, _ := zap.NewDevelopment()
+		return &Logger{fallbackLogger}
+	}
+	return logger
 }
