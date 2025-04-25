@@ -1,10 +1,8 @@
 reqs:
-  create_req_type : "request.poll.create"
-  update_req_type : "request.poll.update"
-topics:
-  req_topic : "poll.requests"
-  producer_topic : "poll.producer"
-
-group_id_name : "poll"
-kafka_url : "kafka:9092"
+  update_req_type : "request.vote.update"
+  create_req_type : "request.vote.create"
+rabbitmq_url : "amqp://rabbitmq:5672"
 dsn : "/data/poll.db"
+queue_name : "votes"
+req_exchange : "requests"
+out_exchange : "votes"
