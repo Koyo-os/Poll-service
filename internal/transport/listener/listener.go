@@ -8,6 +8,7 @@ import (
 	"github.com/Koyo-os/Poll-service/internal/service"
 	"github.com/Koyo-os/Poll-service/pkg/config"
 	"github.com/Koyo-os/Poll-service/pkg/logger"
+
 	"go.uber.org/zap"
 )
 
@@ -18,13 +19,13 @@ type Listener struct {
 	cfg       *config.Config
 }
 
-func Init(inputChan chan entity.Event, logger *logger.Logger, cfg *config.Config, service service.PollService) (*Listener, error) {
+func Init(inputChan chan entity.Event, logger *logger.Logger, cfg *config.Config, service service.PollService) *Listener {
 	return &Listener{
 		inputChan: inputChan,
 		service:   service,
 		logger:    logger,
 		cfg:       cfg,
-	}, nil
+	}
 }
 
 func (list *Listener) Listen(ctx context.Context) {
