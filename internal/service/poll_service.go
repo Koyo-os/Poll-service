@@ -2,8 +2,6 @@ package service
 
 import (
 	"github.com/Koyo-os/Poll-service/internal/entity"
-	"github.com/Koyo-os/Poll-service/internal/publisher"
-	"github.com/Koyo-os/Poll-service/internal/repository"
 )
 
 type PollService interface {
@@ -12,11 +10,11 @@ type PollService interface {
 }
 
 type PollServiceImpl struct {
-	publisher  *publisher.Publisher
-	repository repository.PollRepository
+	publisher  Publisher
+	repository PollRepository
 }
 
-func Init(repository repository.PollRepository, pub *publisher.Publisher) PollService {
+func Init(repository PollRepository, pub Publisher) PollService {
 	return &PollServiceImpl{
 		repository: repository,
 		publisher:  pub,
