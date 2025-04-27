@@ -1,18 +1,44 @@
-version: '3.8'
-
 services:
-  poll-service:
+  master-redis:
+    image: redis:7.0-alpine
+    container_name: master-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+  
+  db:
+    image: mariadb:latest
+    container_name: mariadb
+    environment:
+      - MARIADB_ROOT_PASSWORD=rootpassword
+      - MARIADB_USER=user
+      - MARIADB_PASSWORD=password
+      - MARIADB_DATABASE=testdb
+      - MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=no
+      - MARIADB_RANDOM_ROOT_PASSWORD=no
+      - MARIADB_ROOT_HOST=%
+      - MARIADB_HOST=%
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    restart: unless-stopped
+
+  app:
     build:
       context: .
       dockerfile: Dockerfile
     depends_on:
       - rabbitmq
+      - master-redis
+      - db
     environment:
-      - APP_ENV=production
-      - RABBITMQ_URL=amqp://rabbitmq:5672
-      - SQLITE_PATH=/data/poll.db  
-    volumes:
-      - poll-data:/data  
+      - DB_HOST=db
+      - DB_USER=user
+      - DB_PASSWORD=password
+      - DB_NAME=testdb
+      - DB_PORT=3306
 
   rabbitmq:
     image: rabbitmq:3.12-management
@@ -26,3 +52,6 @@ services:
 volumes:
   poll-data:  
   rabbitmq-data:  
+  redis-data:
+  db_data:
+

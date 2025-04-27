@@ -2,19 +2,22 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/Koyo-os/Poll-service/internal/entity"
-	"github.com/Koyo-os/Poll-service/internal/publisher"
 	"github.com/Koyo-os/Poll-service/internal/repository"
 	"github.com/Koyo-os/Poll-service/internal/service"
+	"github.com/Koyo-os/Poll-service/internal/transport/casher"
 	"github.com/Koyo-os/Poll-service/internal/transport/consumer"
 	"github.com/Koyo-os/Poll-service/internal/transport/listener"
+	"github.com/Koyo-os/Poll-service/internal/transport/publisher"
 	"github.com/Koyo-os/Poll-service/pkg/config"
 	"github.com/Koyo-os/Poll-service/pkg/logger"
 	"github.com/Koyo-os/Poll-service/pkg/retrier"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"gorm.io/driver/sqlite"
+	"github.com/redis/go-redis/v9"
+	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
 	"go.uber.org/zap"
@@ -24,7 +27,7 @@ func main() {
 	cfgLog := logger.Config{
 		LogFile:   "app.log",
 		LogLevel:  "debug",
-		AppName:   "my-app",
+		AppName:   "poll-service",
 		AddCaller: true,
 	}
 
@@ -52,22 +55,22 @@ func main() {
 		logger.Error("error connect to rabbitmq", zap.Error(err))
 	}
 
-	logger.Info("connect to sqlite in " + cfg.Dsn)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+		os.Getenv("DB_USER"),
+		os.Getenv("DB_PASSWORD"),
+		os.Getenv("DB_HOST"),
+		os.Getenv("DB_PORT"),
+		os.Getenv("DB_NAME"),
+	)
 
-	if _, err := os.Stat(cfg.Dsn); os.IsNotExist(err) {
-		file, err := os.Create(cfg.Dsn)
-		if err != nil {
-			logger.Error("error create db file", zap.Error(err))
-		}
+	logger.Info("connecting to mariadb...", zap.String("dsn", dsn))
 
-		logger.Info("created database file")
-
-		file.Close()
-	}
-
-	db, err := gorm.Open(sqlite.Open(cfg.Dsn))
+	db, err := retrier.Connect(10, 10, func() (*gorm.DB, error) {
+		return gorm.Open(mysql.Open(dsn))
+	})
 	if err != nil {
-		logger.Error("error connect to db", zap.Error(err))
+		logger.Error("error connect to mariadb", zap.Error(err))
+
 		return
 	}
 
@@ -85,7 +88,27 @@ func main() {
 
 	logger.Info("publisher init successfully")
 
-	service := service.Init(repository.Init(db, logger), publisher)
+	logger.Info("connecting to redis with", zap.String("url", "master-redis:6379"))
+
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     "master-redis:6379",
+		Password: "",
+		DB:       0,
+	})
+
+	err = retrier.Do(3, 5, func() error {
+		return redisClient.Ping(context.Background()).Err()
+	})
+	if err != nil {
+		logger.Error("error connect to redis", zap.Error(err))
+		return
+	}
+
+	logger.Info("successfully connected to redis")
+
+	casher := casher.Init(redisClient)
+
+	service := service.Init(repository.Init(db, logger), publisher, casher)
 
 	consumer, err := retrier.Connect(3, 5, func() (*consumer.Consumer, error) {
 		return consumer.Init(cfg, logger, conn)
