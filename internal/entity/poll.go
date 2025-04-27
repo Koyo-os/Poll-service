@@ -20,6 +20,7 @@ type Poll struct {
 	AuthorID  string    `json:"author_id"`
 	Desc      string    `json:"desc"`
 	Fields    []Field   `json:"fields" gorm:"foreignKey:PollID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	Closed    bool      `json:"closed"`
 }
 
 func (p *Poll) BeforeCreate(tx *gorm.DB) (err error) {
