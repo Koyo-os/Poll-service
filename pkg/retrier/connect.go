@@ -15,7 +15,7 @@ func Connect[T any](retry uint8, sleep uint, connector func() (T, error)) (T, er
 			return out, nil
 		}
 
-		time.Sleep(10 * time.Second)
+		time.Sleep(time.Duration(sleep) * time.Second)
 	}
 
 	return out, err
