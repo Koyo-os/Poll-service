@@ -3,39 +3,26 @@ package repository
 import (
 	"github.com/Koyo-os/Poll-service/internal/entity"
 	"github.com/google/uuid"
-	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap"
 )
 
-func parseUUID(input string) (uuid.UUID, error) {
-	return uuid.Parse(input)
-}
-
-func (repoImpl *PollRepositoryImpl) Update(uuid string, poll *entity.Poll) error {
-	uid, err := parseUUID(uuid)
-	if err != nil {
-		return err
-	}
-
+func (repoImpl *PollRepositoryImpl) Update(uid uuid.UUID, poll *entity.Poll) error {
 	res := repoImpl.db.Where(&entity.Poll{
 		ID: uid,
 	},
 	).Updates(poll)
 
-	if err = res.Error; err != nil {
-		repoImpl.logger.Error("error update poll with", zapcore.Field{
-			Key:    "err",
-			String: uuid,
-		},
-			zapcore.Field{
-				Key:    "ID",
-				String: uuid,
-			})
-	}
+	if err := res.Error; err != nil {
+		repoImpl.logger.Error("error update poll with",
+			zap.String("poll_id", uid.String()),
+			zap.Error(err),
+		)
 
-	repoImpl.logger.Info("successfully update poll with", zapcore.Field{
-		Key:    "ID",
-		String: uuid,
-	})
+		return err
+	}
+	repoImpl.logger.Info("successfully update poll with",
+		zap.String("poll_id", uid.String()),
+	)
 
 	return nil
 }
