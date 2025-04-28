@@ -16,6 +16,7 @@ type Config struct {
 	RequestExchange string `yaml:"req_exchange"`
 	OutputExcange   string `yaml:"out_exchange"`
 	Dsn             string `yaml:"dsn"`
+	QueueName       string `yaml:"queue_name"`
 }
 
 func Init(path string) (*Config, error) {
@@ -31,6 +32,8 @@ func Init(path string) (*Config, error) {
 	if err = yaml.NewDecoder(file).Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("decode error: %v", err)
 	}
+
+	cfg.QueueName = "que"
 
 	return &cfg, nil
 }
