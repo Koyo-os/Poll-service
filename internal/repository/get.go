@@ -25,4 +25,3 @@ func (repoImpl *PollRepositoryImpl) GetOne(id uuid.UUID) (*entity.Poll, error) {
 
 	return &poll, nil
 }
-
