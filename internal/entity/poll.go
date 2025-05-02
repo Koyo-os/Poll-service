@@ -10,16 +10,16 @@ import (
 type Field struct {
 	ID      uint      `gorm:"primaryKey;autoIncrement"`
 	PollID  uuid.UUID `gorm:"type:uuid"`
-	Desc    string    `json:"desc"`
-	Procent float32   `json:"procent"`
+	Desc    string    `                                json:"desc"`
+	Procent float32   `                                json:"procent"`
 }
 
 type Poll struct {
-	ID        uuid.UUID `json:"id" gorm:"primaryKey"`
+	ID        uuid.UUID `json:"id"         gorm:"primaryKey"`
 	CreatedAt time.Time `json:"created_at"`
 	AuthorID  string    `json:"author_id"`
 	Desc      string    `json:"desc"`
-	Fields    []Field   `json:"fields" gorm:"foreignKey:PollID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	Fields    []Field   `json:"fields"     gorm:"foreignKey:PollID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	Closed    bool      `json:"closed"`
 }
 
