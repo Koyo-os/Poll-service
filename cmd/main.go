@@ -17,10 +17,9 @@ import (
 	"github.com/Koyo-os/Poll-service/pkg/retrier"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-
-	"go.uber.org/zap"
 )
 
 func main() {
