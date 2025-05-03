@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/Koyo-os/Poll-service/pkg/logger"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -13,13 +12,11 @@ const LIFE_TIME = 10 * time.Hour
 
 type Casher struct {
 	redisClient *redis.Client
-	logger      *logger.Logger
 }
 
-func Init(redisClient *redis.Client, logger *logger.Logger) *Casher {
+func Init(redisClient *redis.Client) *Casher {
 	return &Casher{
 		redisClient: redisClient,
-		logger:      logger,
 	}
 }
 
