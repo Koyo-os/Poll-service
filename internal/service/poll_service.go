@@ -9,18 +9,13 @@ import (
 	"github.com/google/uuid"
 )
 
-type PollService interface {
-	Add(*entity.Poll) error
-	Update(string, *entity.Poll) error
-}
-
 type PollServiceImpl struct {
 	publisher  Publisher
 	repository PollRepository
 	casher     Casher
 }
 
-func Init(repository PollRepository, pub Publisher, casher Casher) PollService {
+func Init(repository PollRepository, pub Publisher, casher Casher) *PollServiceImpl {
 	return &PollServiceImpl{
 		repository: repository,
 		publisher:  pub,
@@ -68,10 +63,9 @@ func (serviceImpl *PollServiceImpl) Update(id string, poll *entity.Poll) error {
 			cherr <- serviceImpl.publisher.Publish(poll, "poll.updated")
 		}()
 
-		err = retrier.Do(3, 5, func() error {
+		if err := retrier.Do(3, 5, func() error {
 			return serviceImpl.casher.DoCashing(context.Background(), poll.ID.String(), poll)
-		})
-		if err != nil {
+		}); err != nil {
 			return err
 		}
 
@@ -84,6 +78,8 @@ func (serviceImpl *PollServiceImpl) Update(id string, poll *entity.Poll) error {
 }
 
 func (serviceImpl *PollServiceImpl) SetPollClosed(pollId string) error {
+	var cherr chan error
+
 	uid, err := uuid.Parse(pollId)
 	if err != nil {
 		return err
@@ -94,11 +90,28 @@ func (serviceImpl *PollServiceImpl) SetPollClosed(pollId string) error {
 		return err
 	}
 
-	if poll.Closed == true {
+	if poll.Closed {
 		return errors.New("poll is already closed")
 	}
 
 	poll.Closed = true
 
-	return serviceImpl.repository.Update(uid, poll)
+	if err = serviceImpl.repository.Update(uid, poll); err != nil {
+		return err
+	}
+
+	go func() {
+		cherr <- serviceImpl.publisher.Publish(poll, "poll.updated")
+	}()
+
+	if err = retrier.Do(3, 5, func() error {
+		return serviceImpl.casher.DoCashing(context.Background(), poll.ID.String(), poll)
+	}); err != nil {
+		return err
+	}
+	if err = <-cherr; err != nil {
+		return err
+	}
+
+	return nil
 }
