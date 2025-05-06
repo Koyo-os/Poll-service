@@ -1,9 +1,9 @@
 reqs:
-  update_req_type : "request.vote.update"
-  create_req_type : "request.vote.create"
+  update_req_type : "request.poll.update"
+  create_req_type : "request.poll.create"
+  create_vote_req_type : "vote.created"
   set_closed_req_type : "request.vote.setclosed"
 rabbitmq_url : "amqp://rabbitmq:5672"
-dsn : "/data/poll.db"
 queue_name : "votes"
 req_exchange : "requests"
 out_exchange : "votes"
