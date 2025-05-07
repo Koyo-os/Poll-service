@@ -1,0 +1,19 @@
+project: knight
+variables: {}
+pipeline:
+    - name: "k8s.start.services"
+      cmds:
+        - kubectl apply -f deployment/db-pvc.yaml
+        - kubectl apply -f deployment/db-secrets.yaml
+        - kubectl apply -f deployment/db.yaml
+        - kubectl apply -f deployment/db-service.yaml
+        - kubectl apply -f deployment/redis-pvc.yaml
+        - kubectl apply -f deployment/redis.yaml
+        - kubectl apply -f deployment/redis-service.yaml
+        - kubectl apply -f deployment/rabbitmq-pvc.yaml
+        - kubectl apply -f deployment/rabbitmq.yaml
+        - kubectl apply -f deployment/rabbitmq-service.yaml
+    - name: "k8s.start.app"
+      cmds:
+        - kubectl apply -f deployment/app.yaml
+        - kubectl apply -f deployment/app.yaml
