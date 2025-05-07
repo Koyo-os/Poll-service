@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/Koyo-os/Poll-service/internal/entity"
@@ -15,6 +16,7 @@ import (
 	"github.com/Koyo-os/Poll-service/pkg/config"
 	"github.com/Koyo-os/Poll-service/pkg/logger"
 	"github.com/Koyo-os/Poll-service/pkg/retrier"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -48,6 +50,10 @@ func main() {
 	var mainChan chan entity.Event
 
 	conn, err := retrier.Connect(5, 10, func() (*amqp.Connection, error) {
+		return amqp.Dial(cfg.RabbitmqUrl)
+	})
+
+	secondConn, err := retrier.Connect(5, 10, func() (*amqp.Connection, error) {
 		return amqp.Dial(cfg.RabbitmqUrl)
 	})
 	if err != nil {
@@ -110,7 +116,7 @@ func main() {
 	service := service.Init(repository.Init(db, logger), publisher, casher)
 
 	consumer, err := retrier.Connect(3, 5, func() (*consumer.Consumer, error) {
-		return consumer.Init(cfg, logger, conn)
+		return consumer.Init(cfg, logger, secondConn)
 	})
 	if err != nil {
 		logger.Error("error init producer", zap.Error(err))
@@ -123,9 +129,18 @@ func main() {
 		return
 	}
 
+	err = consumer.Subscribe("votes", cfg.VoteExchange, "vote.*")
+	if err != nil {
+		logger.Error("error subscribe to", zap.String("queue_name", cfg.QueueName), zap.Error(err))
+		return
+	}
+
 	logger.Info("consumer init successfully")
 
 	listener := listener.Init(mainChan, logger, cfg, service)
+
+	http.Handle("/metrics", promhttp.Handler())
+	go http.ListenAndServe(":8080", nil)
 
 	go listener.Listen(context.Background())
 	consumer.ConsumeMessages(mainChan)
