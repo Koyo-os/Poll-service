@@ -9,11 +9,14 @@ import (
 
 type Config struct {
 	Reqs struct {
+		SetClosedRequestType  string `yaml:"set_closed_req_type"`
+		CreateVoteRequestType string `yaml:"create_vote_req_type"`
 		CreatePollRequestType string `yaml:"create_req_type"`
 		UpdatePollRequestType string `yaml:"update_req_type"`
 	} `yaml:"reqs"`
 	RabbitmqUrl     string `yaml:"rabbitmq_url"`
 	RequestExchange string `yaml:"req_exchange"`
+	VoteExchange    string `yaml:"vote_exchange"`
 	OutputExcange   string `yaml:"out_exchange"`
 	Dsn             string `yaml:"dsn"`
 	QueueName       string `yaml:"queue_name"`
