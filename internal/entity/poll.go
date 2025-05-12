@@ -20,6 +20,7 @@ type Poll struct {
 	AuthorID  string    `json:"author_id"`
 	Desc      string    `json:"desc"`
 	Fields    []Field   `json:"fields"     gorm:"foreignKey:PollID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	DeleteIn  time.Time `json:"delete_in"`
 	Closed    bool      `json:"closed"`
 }
 
