@@ -14,6 +14,7 @@ import (
 	"github.com/Koyo-os/Poll-service/internal/transport/listener"
 	"github.com/Koyo-os/Poll-service/internal/transport/publisher"
 	"github.com/Koyo-os/Poll-service/pkg/config"
+	"github.com/Koyo-os/Poll-service/pkg/deletepull"
 	"github.com/Koyo-os/Poll-service/pkg/logger"
 	"github.com/Koyo-os/Poll-service/pkg/retrier"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -24,7 +25,19 @@ import (
 	"gorm.io/gorm"
 )
 
+func errorListener(ch chan error, logger *logger.Logger) {
+	for err := range ch {
+		logger.Error("error from deletepull", zap.Error(err))
+	}
+}
+
 func main() {
+	var (
+		mainChan chan entity.Event
+		reqChan  chan deletepull.Request
+		errChan  chan error
+	)
+
 	cfgLog := logger.Config{
 		LogFile:   "app.log",
 		LogLevel:  "debug",
@@ -39,6 +52,8 @@ func main() {
 
 	logger := logger.Get()
 
+	go errorListener(errChan, logger)
+
 	cfg, err := config.Init("config.yaml")
 	if err != nil || cfg == nil {
 		logger.Error("error load config from config.yaml", zap.Error(err))
@@ -47,17 +62,11 @@ func main() {
 
 	logger.Info("config loaded successfully from", zap.String("path", "config.yaml"))
 
-	var mainChan chan entity.Event
-
-	conn, err := retrier.Connect(5, 10, func() (*amqp.Connection, error) {
+	rabbitmqConns, err := retrier.MuliConnects(2, func() (*amqp.Connection, error) {
 		return amqp.Dial(cfg.RabbitmqUrl)
-	})
-
-	secondConn, err := retrier.Connect(5, 10, func() (*amqp.Connection, error) {
-		return amqp.Dial(cfg.RabbitmqUrl)
-	})
+	}, nil)
 	if err != nil {
-		logger.Error("error connect to rabbitmq", zap.Error(err))
+		logger.Error("error connect to rabbitmq")
 	}
 
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
@@ -84,7 +93,7 @@ func main() {
 	db.AutoMigrate(&entity.Poll{})
 
 	publisher, err := retrier.Connect(3, 5, func() (*publisher.Publisher, error) {
-		return publisher.Init(cfg, logger, conn)
+		return publisher.Init(cfg, logger, rabbitmqConns[0])
 	})
 	if err != nil {
 		logger.Error("error init publisher", zap.Error(err))
@@ -95,28 +104,34 @@ func main() {
 
 	logger.Info("connecting to redis with", zap.String("url", "master-redis:6379"))
 
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:     "master-redis:6379",
-		Password: "",
-		DB:       0,
-	})
+	redisConns, err := retrier.MuliConnects(2, func() (*redis.Client, error) {
+		redisClient := redis.NewClient(&redis.Options{
+			Addr:     "master-redis:6379",
+			Password: "",
+			DB:       0,
+		})
 
-	err = retrier.Do(3, 5, func() error {
-		return redisClient.Ping(context.Background()).Err()
-	})
+		err := redisClient.Ping(context.Background()).Err()
+		if err != nil {
+			return nil, err
+		}
+
+		return redisClient, nil
+	}, nil)
 	if err != nil {
 		logger.Error("error connect to redis", zap.Error(err))
 		return
 	}
 
 	logger.Info("successfully connected to redis")
+	deletepull := deletepull.Init(errChan, redisConns[1], logger)
 
-	casher := casher.Init(redisClient)
+	casher := casher.Init(redisConns[0])
 
 	service := service.Init(repository.Init(db, logger), publisher, casher)
 
 	consumer, err := retrier.Connect(3, 5, func() (*consumer.Consumer, error) {
-		return consumer.Init(cfg, logger, secondConn)
+		return consumer.Init(cfg, logger, rabbitmqConns[1])
 	})
 	if err != nil {
 		logger.Error("error init producer", zap.Error(err))
@@ -141,7 +156,7 @@ func main() {
 
 	http.Handle("/metrics", promhttp.Handler())
 	go http.ListenAndServe(":8080", nil)
-
+	go deletepull.Listen(context.Background())
 	go listener.Listen(context.Background())
 	consumer.ConsumeMessages(mainChan)
 }
