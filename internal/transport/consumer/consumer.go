@@ -7,6 +7,7 @@ import (
 	"github.com/Koyo-os/Poll-service/internal/entity"
 	"github.com/Koyo-os/Poll-service/pkg/config"
 	"github.com/Koyo-os/Poll-service/pkg/logger"
+	"github.com/Koyo-os/Poll-service/pkg/metrics"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 )
@@ -86,12 +87,12 @@ func (p *Consumer) ConsumeMessages(outputChan chan entity.Event) {
 		}
 
 		queue, err := p.channel.QueueDeclare(
-			"que", // name
-			true,  // durable
-			false, // delete when unused
-			false, // exclusive
-			false, // no-wait
-			nil,   // arguments
+			"polls", // name
+			true,    // durable
+			false,   // delete when unused
+			false,   // exclusive
+			false,   // no-wait
+			nil,     // arguments
 		)
 		if err != nil {
 			p.logger.Error("failed to declare a queue", zap.Error(err))
@@ -146,6 +147,9 @@ func (p *Consumer) ConsumeMessages(outputChan chan entity.Event) {
 				zap.Time("timestamp", event.TimeStamp))
 
 			outputChan <- event
+
+			lag := time.Since(msg.Timestamp)
+			metrics.EventLag.WithLabelValues(event.Type).Set(float64(lag))
 		}
 
 		p.logger.Warn("rabbitmq channel closed, reconnecting...")
@@ -174,7 +178,7 @@ func (p *Consumer) reconnect() error {
 	for exchange := range p.exchanges {
 		err = p.channel.ExchangeDeclare(
 			exchange, // name
-			"fanout", // type
+			"direct", // type
 			true,     // durable
 			false,    // auto-deleted
 			false,    // internal
