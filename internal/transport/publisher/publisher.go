@@ -26,22 +26,6 @@ func Init(cfg *config.Config, logger *logger.Logger, conn *amqp.Connection) (*Pu
 		return nil, err
 	}
 
-	err = channel.ExchangeDeclare(
-		cfg.OutputExcange, // name
-		"fanout",          // type
-		true,              // durable
-		false,             // auto-deleted
-		false,             // internal
-		false,             // no-wait
-		nil,               // arguments
-	)
-	if err != nil {
-		logger.Error("error declaring exchange " + err.Error())
-		channel.Close()
-		conn.Close()
-		return nil, err
-	}
-
 	return &Publisher{
 		conn:    conn,
 		channel: channel,
