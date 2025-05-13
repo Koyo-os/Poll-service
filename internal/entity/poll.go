@@ -15,13 +15,14 @@ type Field struct {
 }
 
 type Poll struct {
-	ID        uuid.UUID `json:"id"         gorm:"primaryKey"`
-	CreatedAt time.Time `json:"created_at"`
-	AuthorID  string    `json:"author_id"`
-	Desc      string    `json:"desc"`
-	Fields    []Field   `json:"fields"     gorm:"foreignKey:PollID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	DeleteIn  time.Time `json:"delete_in"`
-	Closed    bool      `json:"closed"`
+	ID             uuid.UUID `json:"id"         gorm:"primaryKey"`
+	CreatedAt      time.Time `json:"created_at"`
+	AuthorID       string    `json:"author_id"`
+	Desc           string    `json:"desc"`
+	Fields         []Field   `json:"fields"     gorm:"foreignKey:PollID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	LimitedForTime bool      `json:"limited_for_time"`
+	DeleteIn       time.Time `json:"delete_in"`
+	Closed         bool      `json:"closed"`
 }
 
 func (p *Poll) BeforeCreate(tx *gorm.DB) (err error) {
