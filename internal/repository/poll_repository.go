@@ -2,6 +2,7 @@ package repository
 
 import (
 	"github.com/Koyo-os/Poll-service/pkg/logger"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -15,4 +16,8 @@ func Init(db *gorm.DB, logger *logger.Logger) *PollRepositoryImpl {
 		db:     db,
 		logger: logger,
 	}
+}
+
+func (repo *PollRepositoryImpl) Do(id uuid.UUID) error {
+	return repo.Delete(id)
 }
