@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/Koyo-os/Poll-service/internal/entity"
 	"github.com/google/uuid"
@@ -20,5 +21,9 @@ type (
 
 	Casher interface {
 		DoCashing(ctx context.Context, key string, payload any) error // payload must to be pointer
+	}
+
+	Waiter interface {
+		AddDeleteWaiter(time.Duration, uuid.UUID)
 	}
 )
