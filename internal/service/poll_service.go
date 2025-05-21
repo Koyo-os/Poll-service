@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/Koyo-os/Poll-service/internal/entity"
 	"github.com/Koyo-os/Poll-service/pkg/retrier"
@@ -12,14 +13,16 @@ import (
 type PollServiceImpl struct {
 	publisher  Publisher
 	repository PollRepository
+	waiter     Waiter
 	casher     Casher
 }
 
-func Init(repository PollRepository, pub Publisher, casher Casher) *PollServiceImpl {
+func Init(repository PollRepository, pub Publisher, casher Casher, waiter Waiter) *PollServiceImpl {
 	return &PollServiceImpl{
 		repository: repository,
 		publisher:  pub,
 		casher:     casher,
+		waiter:     waiter,
 	}
 }
 
@@ -38,6 +41,10 @@ func (serviceImpl *PollServiceImpl) Add(poll *entity.Poll) error {
 		})
 		if err != nil {
 			return err
+		}
+
+		if poll.LimitedForTime {
+			serviceImpl.waiter.AddDeleteWaiter(time.Until(poll.DeleteIn), poll.ID)
 		}
 
 		if err = <-cherr; err != nil {
