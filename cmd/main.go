@@ -14,8 +14,8 @@ import (
 	"github.com/Koyo-os/Poll-service/internal/transport/listener"
 	"github.com/Koyo-os/Poll-service/internal/transport/publisher"
 	"github.com/Koyo-os/Poll-service/pkg/config"
-	"github.com/Koyo-os/Poll-service/pkg/deletepull"
 	"github.com/Koyo-os/Poll-service/pkg/logger"
+	"github.com/Koyo-os/Poll-service/pkg/pull"
 	"github.com/Koyo-os/Poll-service/pkg/retrier"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -34,7 +34,7 @@ func errorListener(ch chan error, logger *logger.Logger) {
 func main() {
 	var (
 		mainChan chan entity.Event
-		reqChan  chan deletepull.Request
+		reqChan  chan pull.Request
 		errChan  chan error
 	)
 
@@ -124,11 +124,13 @@ func main() {
 	}
 
 	logger.Info("successfully connected to redis")
-	deletepull := deletepull.Init(errChan, redisConns[1], logger)
+
+	repo := repository.Init(db, logger)
+	deletepull := pull.Init(errChan, redisConns[1], logger, repo)
 
 	casher := casher.Init(redisConns[0])
 
-	service := service.Init(repository.Init(db, logger), publisher, casher)
+	service := service.Init(repo, publisher, casher, pull.InitClient(reqChan))
 
 	consumer, err := retrier.Connect(3, 5, func() (*consumer.Consumer, error) {
 		return consumer.Init(cfg, logger, rabbitmqConns[1])
